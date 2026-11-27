@@ -7272,4 +7272,86 @@ b.onclick=async()=>{const v=Date.parse(d.value);
   if(!confirm('Save '+d.value+'? You can’t change it later.'))return;
   try{await rdb.ref('ages/'+me.uid).set(v);await status(me);d.value='';toast('Birthday saved.')}catch(e){toast('Couldn’t save your birthday.')}};
 })();
+</script><script>
+// ---- upgrade 4: action buttons, mobile building, closable chat, portrait/landscape ----
+(()=>{
+const css=document.createElement('style');css.textContent=`
+.bar{flex-wrap:nowrap;overflow-x:auto}.bar>*{flex:0 0 auto}.bar button{min-height:44px}.bar .sw{min-width:36px;min-height:36px}
+#ph{white-space:nowrap}#sw{flex:0 0 auto}
+#cp2{top:calc(70px + env(safe-area-inset-top,0px));bottom:auto;max-height:calc(100% - 150px - env(safe-area-inset-top,0px));overflow:auto}
+#cx{position:sticky;top:0;align-self:flex-end;flex:0 0 auto;min-height:44px;z-index:1}
+#cp2>*{flex-shrink:0}
+@media (orientation:landscape) and (max-height:500px){.bar{padding:4px;gap:4px}.bar button,.bar input{padding:4px 10px;min-height:36px}#inv button{height:36px!important}
+ #cp2{left:auto;right:8px;width:min(360px,55%);top:calc(52px + env(safe-area-inset-top,0px));max-height:calc(100% - 64px - env(safe-area-inset-top,0px));z-index:8}}`;
+document.head.append(css);
+const make=(parent,text,fn)=>{const b=document.createElement('button');b.textContent=text;b.style.minHeight='48px';b.onclick=fn;parent.append(b);return b};
+
+const x=document.createElement('button');x.id='cx';x.textContent='Close chat';x.onclick=()=>$('cp2').hidden=true;$('cp2').prepend(x);
+addEventListener('keydown',e=>{if(e.code==='Escape')$('cp2').hidden=true});
+
+const column=()=>{const d=document.createElement('div');d.style.cssText='position:absolute;z-index:4;right:10px;display:flex;flex-direction:column;gap:6px';d.hidden=true;document.body.append(d);return d};
+const acts=column(),use=make(acts,'Pick up',()=>fp=1),item=make(acts,'Use item',()=>shoot());
+const view=column();
+const zoom=f=>{dist=Math.min(130,Math.max(8,dist*f));camOrbit()};
+const move=(f,s)=>{const sn=Math.sin(yaw),cs=Math.cos(yaw),k=dist*.12;panX=Math.max(-N,Math.min(N,panX+(-f*sn+s*cs)*k));panZ=Math.max(-N,Math.min(N,panZ+(-f*cs-s*sn)*k));camOrbit()};
+view.style.display='grid';view.style.gridTemplateColumns='repeat(3,48px)';
+[['+',()=>zoom(.85)],['▲',()=>move(1,0)],['−',()=>zoom(1.18)],['◀',()=>move(0,-1)],['▼',()=>move(-1,0)],['▶',()=>move(0,1)]].forEach(a=>make(view,a[0],a[1]));
+
+const pts=new Map();let gap=0,multi=false;
+document.addEventListener('pointerdown',e=>{if(e.target!==cv)return;pts.set(e.pointerId,e);if(pts.size>1){multi=true;dn=null;gap=0;e.stopPropagation()}},true);
+document.addEventListener('pointermove',e=>{if(!pts.has(e.pointerId))return;pts.set(e.pointerId,e);if(!multi)return;e.stopPropagation();
+  if(pts.size<2||mode!=='build')return;const [a,b]=[...pts.values()],g=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);if(gap&&g)zoom(gap/g);gap=g},true);
+const end=e=>{if(!pts.delete(e.pointerId))return;if(multi)e.stopPropagation();if(!pts.size)multi=false};
+document.addEventListener('pointerup',end,true);document.addEventListener('pointercancel',end,true);
+
+const jump=document.querySelector('[aria-label="Space"]'),pad=jump&&jump.parentElement;
+if(pad){pad.style.justifyContent='flex-start';jump.textContent='Jump';acts.append(jump);jump.style.gridColumn=''}
+setInterval(()=>{const playing=mode==='play'&&!!pl,building=mode==='build';
+  acts.hidden=!playing;view.style.display=building?'grid':'none';view.hidden=!building;
+  const low=(building?$('hb2').offsetHeight:$('inv').offsetHeight)+12,b='calc('+low+'px + env(safe-area-inset-bottom,0px))';
+  acts.style.bottom=view.style.bottom=b;if(pad)pad.style.bottom=b;
+  $('cl').style.bottom='auto';$('cl').style.top='calc('+($('hp').offsetHeight+8)+'px + env(safe-area-inset-top,0px))';
+  if(!playing)return;
+  const held=pl.heldIdx>=0&&pl.inv[pl.heldIdx];item.hidden=!held;
+  const near=props.some(p=>!p.taken&&['car','board','gun'].includes(p.t)&&Math.hypot(p.wx-pl.x,p.wz-pl.z)<2.8&&Math.abs(p.wy-pl.y)<1.6);
+  use.textContent=pl.mode!=='walk'?'Get off':'Pick up';use.hidden=pl.mode==='walk'&&!near},150);
+})();
+</script><script>
+// ---- upgrade 5: 8-way joystick replaces the play D-pad ----
+(()=>{
+const up=document.querySelector('[aria-label="KeyW"]');if(!up)return;
+const grid=up.parentElement,pad=grid.parentElement;grid.remove();
+const base=document.createElement('div'),knob=document.createElement('div');
+base.setAttribute('aria-label','Movement joystick');
+base.style.cssText='position:relative;width:128px;height:128px;border-radius:50%;background:color-mix(in srgb,var(--pn) 70%,transparent);border:2px solid var(--ln);pointer-events:auto;touch-action:none;user-select:none';
+knob.style.cssText='position:absolute;left:36px;top:36px;width:52px;height:52px;border-radius:50%;background:var(--ac);pointer-events:none';
+base.append(knob);pad.prepend(base);
+let id=null;
+const set=(w,a,s,d)=>{keys.KeyW=w;keys.KeyA=a;keys.KeyS=s;keys.KeyD=d};
+const reset=()=>{id=null;set(0,0,0,0);knob.style.transform=''};
+function steer(e){const r=base.getBoundingClientRect();let x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2;
+  const len=Math.hypot(x,y),k=Math.min(1,44/(len||1));;
+  if(len<14)return set(0,0,0,0);
+  const n=(Math.round(Math.atan2(y,x)/(Math.PI/4))+8)%8; // 0 right, 2 down, 4 left, 6 up
+  set(+(n>=5),+(n>=3&&n<=5),+(n>=1&&n<=3),+(n===7||n<=1))}
+base.onpointerdown=e=>{if(id!==null)return;id=e.pointerId;base.setPointerCapture(id);steer(e)};
+base.onpointermove=e=>{if(e.pointerId===id)steer(e)};
+base.onpointerup=base.onpointercancel=base.onlostpointercapture=e=>{if(e.pointerId===id)reset()};
+setInterval(()=>{if(mode!=='play'&&id!==null)reset()},200);
+})();
+</script><script>
+// ---- upgrade 6: console-style 8-way D-pad (round dish with a rocking cross) ----
+(()=>{
+const base=document.querySelector('[aria-label="Movement joystick"]');if(!base)return;
+base.setAttribute('aria-label','8-way D-pad');
+base.style.width=base.style.height='144px';base.style.background='radial-gradient(circle,#2b2c30 60%,#151619 100%)';base.style.borderColor='#55575e';
+const knob=base.firstChild;
+knob.style.cssText='position:absolute;inset:14px;pointer-events:none;transition:rotate .05s';
+knob.innerHTML='<svg viewBox="0 0 100 100" width="100%" height="100%"><path d="M35 4h30v31h31v30H65v31H35V65H4V35h31z" fill="#0b0b0d" stroke="#777a82" stroke-width="2" stroke-linejoin="round"/><circle cx="50" cy="50" r="12" fill="#1c1d21"/><path d="M50 10l7 11H43zM90 50l-11 7V43zM50 90l-7-11h14zM10 50l11-7v14z" fill="#8b8e96"/></svg>';
+// tilt the cross toward whatever direction is held
+(function tilt(){requestAnimationFrame(tilt);
+  const x=(keys.KeyD?1:0)-(keys.KeyA?1:0),y=(keys.KeyS?1:0)-(keys.KeyW?1:0);
+  knob.style.translate='0';knob.style.transform=x||y?'perspective(260px) rotateX('+(-y*18)+'deg) rotateY('+(x*18)+'deg)':''})();
+const stop=()=>knob.style.transform='';base.addEventListener('pointerup',stop);
+})();
 </script></body></html>
