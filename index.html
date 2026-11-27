@@ -7417,7 +7417,7 @@ function outfit(code,bb,geo0){const g=new THREE.Group(),[h,f,b,,hair,tint=0]=Str
       part(g,box(.28,.18,.06),0x3f9a66,0,y-.09,z-.2);part(g,box(.06,.06,.03),0xffd23f,0,y+.1,z-.205)}}
   return g}
 function dress(m,code){if(!m||!m.geometry||m.userData.wear===code)return;
-  if(m.userData.outfit)m.remove(m.userData.outfit);
+  const old=m.userData.outfit;if(old&&old.parent)old.parent.remove(old);
   m.geometry.computeBoundingBox();m.userData.outfit=outfit(code,m.geometry.boundingBox,m.geometry);m.userData.wear=code;m.add(m.userData.outfit)}
 setInterval(()=>{if(pl&&!R.xr.isPresenting)dress(pl.m,myw);Object.values(rem).forEach(r=>{if(!r.vr)dress(r.m,r.w||'0.0.0')})},200);
 const wrap=document.createElement('div');wrap.style.cssText='display:flex;gap:8px;flex-wrap:wrap;justify-content:center;flex-shrink:0';
@@ -7684,11 +7684,13 @@ const tokens=()=>{try{return +localStorage.getItem(key())||0}catch(e){return 0}}
 let hooked=null,refs=[],hp=3,safeUntil=0;const paid={},shotAt={};
 // your bullets hitting other players
 const tick0=tickBullets;
-tickBullets=function(dt){tick0(dt);if(!mp)return;
+tickBullets=function(dt){if(!mp)return tick0(dt);
   for(let i=bullets.length-1;i>=0;i--){const b=bullets[i],p=b.m.position;
     for(const [id,r] of Object.entries(rem)){const q=r.m.position;
-      if(Math.hypot(p.x-q.x,p.z-q.z)<.6&&p.y>q.y&&p.y<q.y+1.9){S.remove(b.m);bullets.splice(i,1);shotAt[id]=Date.now();
-        mp.ref.parent.child('hits/'+id).push({by:uid}).catch(()=>toast('Hit not sent. Update the database rules.'));break}}}};
+      const sx=b.vx*dt,sz=b.vz*dt,u=Math.max(0,Math.min(1,((q.x-p.x)*sx+(q.z-p.z)*sz)/(sx*sx+sz*sz||1))); // whole path this frame
+      if(Math.hypot(p.x+sx*u-q.x,p.z+sz*u-q.z)<.65&&p.y>q.y&&p.y<q.y+1.9){S.remove(b.m);bullets.splice(i,1);shotAt[id]=Date.now();
+        mp.ref.parent.child('hits/'+id).push({by:uid}).catch(()=>toast('Hit not sent. Update the database rules.'));break}}}
+  tick0(dt)};
 setInterval(()=>{hud.hidden=mode!=='play';hud.textContent='Block Tokens: '+tokens();
   if(mp===hooked)return;refs.forEach(r=>r.off());refs=[];hooked=mp;hp=3;if(!mp)return;
   const m=mp,room=m.ref.parent,mine=room.child('hits/'+uid),kills=room.child('kills/'+uid);refs=[mine,kills];safeUntil=Date.now()+3000;
@@ -7701,5 +7703,73 @@ setInterval(()=>{hud.hidden=mode!=='play';hud.textContent='Block Tokens: '+token
   kills.on('child_added',s=>{const v=s.val()&&s.val().v;s.ref.remove().catch(()=>{});
     const now=Date.now();if(mp!==m||!v||!shotAt[v]||now-shotAt[v]>10000||now-(paid[v]||0)<30000)return;
     paid[v]=now;try{localStorage.setItem(key(),tokens()+5)}catch(e){}toast('Knockout! +5 Block Tokens')},()=>{})},400);
+})();
+</script><script>
+// ---- upgrade 15: programmable enemies ----
+(()=>{
+const RULES=[['Always',['Patrol','Wander','Guard']],['Sees you',['Chase','Run away','Jump']],['Touches you',['Send to spawn','Take a heart']],['Shot',['Lose health','Vanish','Get faster']]];
+const isEnemy=t=>typeof t==='string'&&t.startsWith('enemy_'),types=[];
+for(let a=0;a<3;a++)for(let b=0;b<3;b++)for(let c=0;c<2;c++)for(let d=0;d<3;d++)types.push('enemy_'+a+b+c+d);
+types.forEach(t=>{MOD[t]={...MOD.car,off:0};PR[t]=-10});
+const mk2=mk;
+mk=function(t,c){if(!isEnemy(t))return mk2(t,c);
+  const g=new THREE.BoxGeometry(.8,1.4,.8);g.translate(0,.7,0);const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({color:0xb71c1c}));
+  [-.18,.18].forEach(x=>{const e=new THREE.Mesh(new THREE.BoxGeometry(.16,.12,.06),new THREE.MeshBasicMaterial({color:0xffee00}));e.position.set(x,1.05,.42);e.raycast=()=>{};m.add(e)});return m};
+const mount2=mount;mount=P=>{if(!isEnemy(P.t))mount2(P)};
+// editor: an Enemy tool and a button for each rule
+const choice=[0,0,0,0],btn=document.createElement('button'),panel=document.createElement('div');
+btn.textContent='Enemy';
+const select=()=>{tool='enemy_'+choice.join('');btn.dataset.t=tool;document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===btn))};
+btn.dataset.t='enemy_0000';btn.onclick=()=>{select();panel.hidden=false};$('sw').before(btn);
+panel.style.cssText='position:absolute;z-index:5;left:8px;top:calc(120px + env(safe-area-inset-top,0px));flex-direction:column;gap:4px;align-items:flex-start';panel.hidden=true;document.body.append(panel);
+const css=document.createElement('style');css.textContent='#enemyPanel{display:flex}#enemyPanel[hidden]{display:none}';panel.id='enemyPanel';document.head.append(css);
+RULES.forEach(([when,list],i)=>{const b=document.createElement('button'),label=()=>b.textContent=when+': '+list[choice[i]];
+  b.onclick=()=>{choice[i]=(choice[i]+1)%list.length;label();select()};label();panel.append(b)});
+const done=document.createElement('button');done.textContent='Close rules';done.onclick=()=>panel.hidden=true;panel.append(done);
+// behaviour while playing
+let run=null,last=performance.now();
+const home=p=>{p.m.position.set(p.wx,p.wy,p.wz);p.m.visible=true;p.e=null};
+(function tick(){requestAnimationFrame(tick);const now=performance.now(),dt=Math.min(.05,(now-last)/1000);last=now;
+  if(mode!=='build'||!String(tool).startsWith('enemy_'))panel.hidden=true;
+  const list=props.filter(p=>isEnemy(p.t));
+  if(mode!=='play'||!pl){if(run){list.forEach(home);run=null}return}
+  if(!run||run.pl!==pl){run={pl,hearts:3,safe:now+2000};list.forEach(home)}
+  list.forEach(p=>{if(!p.m.visible)return;const [always,sees,touch]=p.t.slice(6).split('').map(Number),q=p.m.position;
+    const s=p.e||(p.e={hp:3,speed:2.4,dir:0,turn:0,jump:0});
+    let dx=pl.x-q.x,dz=pl.z-q.z;const dist=Math.hypot(dx,dz),seen=dist<7&&Math.abs(pl.y-p.wy)<3;let vx=0,vz=0;
+    if(seen&&sees<2){const k=(sees?-1:1)/(dist||1);vx=dx*k;vz=dz*k}
+    else if(always<2){if(now>s.turn){s.turn=now+(always?1200:2000);s.dir=always?Math.random()*Math.PI*2:s.dir+Math.PI}vx=Math.sin(s.dir);vz=Math.cos(s.dir)}
+    if(seen&&sees===2)s.jump+=dt*5;else s.jump=0;
+    const x=q.x+vx*s.speed*dt,z=q.z+vz*s.speed*dt;
+    if((vx||vz)&&!hit(x,p.wy,z)){q.x=x;q.z=z;p.m.rotation.y=Math.atan2(vx,vz)}else s.turn=0;
+    q.y=p.wy+Math.abs(Math.sin(s.jump))*1.2;
+    if(dist<.8&&Math.abs(pl.y-q.y)<1.4&&now>run.safe){run.safe=now+2000;
+      if(touch===1&&--run.hearts>0)return toast('Hearts: '+run.hearts+'/3');
+      run.hearts=3;pl.x=pl.sp.x+.5;pl.y=pl.sp.y;pl.z=pl.sp.z+.5;pl.vy=0;toast('The enemy got you!')}})})();
+// bullets: check the whole path flown this frame, so fast shots cannot skip past a target
+const tick1=tickBullets;
+tickBullets=function(dt){
+  for(let i=bullets.length-1;i>=0;i--){const b=bullets[i],a=b.m.position,sx=b.vx*dt,sz=b.vz*dt;
+    for(const p of props){if(!isEnemy(p.t)||!p.m.visible||!p.e)continue;const q=p.m.position;
+      const u=Math.max(0,Math.min(1,((q.x-a.x)*sx+(q.z-a.z)*sz)/(sx*sx+sz*sz||1)));
+      if(Math.hypot(a.x+sx*u-q.x,a.z+sz*u-q.z)<.65&&a.y>q.y&&a.y<q.y+1.7){const shot=+p.t[9];
+        if(shot===2)p.e.speed+=1;
+        if(shot===1||--p.e.hp<=0){p.m.visible=false;toast('Enemy defeated!')}else toast('Hit!');
+        S.remove(b.m);bullets.splice(i,1);break}}}
+  tick1(dt)};
+})();
+</script><script>
+// ---- upgrade 16: bigger tap targets for thin items, so they are easy to erase ----
+(()=>{
+const mk3=mk;
+// [width, height] of the invisible tap box
+const SIZE={coin:[.9,1],flag:[.9,1.9],key:[.9,1],check:[.8,1.3],tele:[.9,.5],jpad:[1,.5],spad:[1,.5],lava:[1,.4]};
+mk=function(t,c){const m=mk3(t,c),size=SIZE[t];if(!size)return m;
+  const [w,h]=size,box=new THREE.Box3(),at=new THREE.Vector3(),point=new THREE.Vector3();
+  m.raycast=(rc,out)=>{if(!m.visible)return;m.getWorldPosition(at);
+    box.min.set(at.x-w/2,at.y,at.z-w/2);box.max.set(at.x+w/2,at.y+h,at.z+w/2);
+    if(!rc.ray.intersectBox(box,point))return;
+    out.push({distance:rc.ray.origin.distanceTo(point),point:point.clone(),object:m,face:{normal:new THREE.Vector3(0,1,0)}})};
+  return m};
 })();
 </script></body></html>
