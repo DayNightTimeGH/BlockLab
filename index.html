@@ -7090,7 +7090,7 @@ function join(room){leave();mpMsg='';if(room&&!uid)mpMsg='Multiplayer off: not s
   if(room&&banned)mpMsg='You are banned from online play';
   if(!room||!rdb||!uid||banned){updCount();return}
   mp={ref:rdb.ref('rooms/'+room+'/players')};mp.me=mp.ref.child(uid);mp.me.onDisconnect().remove().catch(()=>{});
-  mpMsg='connecting…';mp.ci=rdb.ref('.info/connected');mp.ci.on('value',s=>{if(s.val()){mpMsg='';clearTimeout(ct)}updCount()});ct=setTimeout(()=>{mpMsg='can’t reach the database, check its URL';updCount()},20000);
+  mpMsg='connecting…';clearTimeout(ct);ct=setTimeout(()=>{mpMsg='can’t reach the database, check its URL';updCount()},20000);mp.ci=rdb.ref('.info/connected');mp.ci.on('value',s=>{if(s.val()){mpMsg='';clearTimeout(ct)}updCount()});
   const up=s=>{if(s.key===uid)return;const v=s.val();if(!v)return;let r=rem[s.key];
     if(!r){r=rem[s.key]={m:mkPlayer(v.c,!!v.vr),vr:!!v.vr,l:label(String(v.n||'Player').slice(0,20)),cx:v.x,cy:v.y,cz:v.z,ch:v.h||0};S.add(r.m);S.add(r.l)}
     else if(r.vr!==!!v.vr){S.remove(r.m);r.vr=!!v.vr;r.m=mkPlayer(v.c,r.vr);setHeldItem(r.m,r.it||null);S.add(r.m)}
@@ -7369,7 +7369,13 @@ function outfit(code,bb,geo0){const g=new THREE.Group(),[h,f,b]=String(code).spl
   if(h===2){part(g,cyl(.38,.38,.04),0x111111,0,top,0);part(g,cyl(.23,.23,.38),0x111111,0,top+.2,0)}
   if(h===3){part(g,cyl(.27,.27,.12),0xffd23f,0,top+.05,0);for(let i=0;i<5;i++){const a=i*Math.PI*.4;part(g,new THREE.ConeGeometry(.06,.16,6),0xffd23f,Math.sin(a)*.22,top+.18,Math.cos(a)*.22)}}
   if(h===4)part(g,new THREE.ConeGeometry(.22,.46,16),0xe84393,0,top+.22,0);
-  if(FACES[f]){const m=new THREE.Mesh(new THREE.PlaneGeometry(.42,.42),new THREE.MeshBasicMaterial({transparent:true}));m.position.set(0,top-.27,bb.max.z+.01);m.visible=false;
+  if(FACES[f]){// wrap the drawing onto the round head instead of floating it in front
+    const probe=new THREE.Mesh(geo0,new THREE.MeshBasicMaterial({side:THREE.DoubleSide})),rc=new THREE.Raycaster(),down=new THREE.Vector3(0,0,-1);
+    const front0=y=>{rc.set(new THREE.Vector3(0,y,5),down);const h=rc.intersectObject(probe)[0];return h?h.point.z:0};
+    const cy=top-.21,mid=front0(cy),geo=new THREE.PlaneGeometry(.34,.34,10,10),v=geo.attributes.position;
+    for(let i=0;i<v.count;i++){const x=v.getX(i),y=cy+v.getY(i);rc.set(new THREE.Vector3(x,y,5),down);const h=rc.intersectObject(probe)[0];
+      v.setXYZ(i,x,y,(h?h.point.z:Math.max(0,mid-.16))+.012)}
+    const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({transparent:true,depthWrite:false}));m.visible=false;
     new THREE.TextureLoader().load(FACES[f],t=>{m.material.map=t;m.material.needsUpdate=true;m.visible=true});g.add(m)}
   if(b){// find the real torso surface, so the item rests on the back instead of the model's outer bounds
     const probe=new THREE.Mesh(geo0,new THREE.MeshBasicMaterial({side:THREE.DoubleSide})),rc=new THREE.Raycaster();
