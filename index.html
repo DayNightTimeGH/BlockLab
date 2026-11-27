@@ -6855,7 +6855,7 @@ function model(id,size,useH,color){const g=new THREE.BufferGeometry();g.setAttri
   g.translate(-(b.min.x+b.max.x)/2,-b.min.y,-(b.min.z+b.max.z)/2);g.scale(k,k,k);g.computeVertexNormals();
   return{g,off:s.x>s.z?-Math.PI/2:0,m:new THREE.MeshLambertMaterial({color,flatShading:true})}}
 const MOD={car:model('o-car',3,false,'#e5484d'),board:model('o-board',1.3,false,'#3ea6ff'),player:model('o-player',1.7,true,'#f5a000'),gun:model('o-gun',.55,false,'#1c1e21'),hand:model('o-hand',.18,false,'#f5a000'),vrplayer:model('o-vrplayer',1.7,true,'#f5a000')};
-const mk=(k,c)=>new THREE.Mesh(MOD[k].g,c==null?MOD[k].m:pm(c));
+let mk=(k,c)=>new THREE.Mesh(MOD[k].g,c==null?MOD[k].m:pm(c));
 const mkPlayer=(c,vr)=>mk(vr?'vrplayer':'player',c);
 function setHeldItem(m,it){if(m.userData.heldItem===it)return;if(m.userData.heldMesh){m.remove(m.userData.heldMesh);m.userData.heldMesh=null}m.userData.heldItem=it;
   if(it){const g=mk(it);g.position.set(.36,.62,.4);g.rotation.y=Math.PI/2;m.add(g);m.userData.heldMesh=g}}
@@ -7148,4 +7148,128 @@ const csw=[];function setMy(i){myc=i;try{localStorage.setItem('bl_col',i)}catch(
 ['cm','cp'].forEach(id=>COL.forEach((c,i)=>{const b=document.createElement('button');b.className='sw';b.dataset.i=i;b.style.background=c;b.title=CN[i];b.setAttribute('aria-label','Character colour '+CN[i]);b.onclick=()=>setMy(i);csw.push(b);$(id).append(b)}));setMy(myc);
 for(let i=0;i<5;i++){const b=document.createElement('button');b.style.cssText='width:48px;height:48px;font-size:11px';b.onclick=()=>equipSlot(i);invEls.push(b);$('inv').append(b)}
 fit();toMenu();R.setAnimationLoop(loop);
+</script><script>
+// ---- upgrade: undo, coins & finish flag, timer, sounds, fog, search, thumbnails ----
+(()=>{
+const mk0=mk;
+mk=function(t,c){
+  if(t!=='coin'&&t!=='flag')return mk0(t,c);
+  if(t==='coin'){const g=new THREE.CylinderGeometry(.35,.35,.1,20);g.rotateX(Math.PI/2);g.translate(0,.55,0);return new THREE.Mesh(g,new THREE.MeshLambertMaterial({color:0xffd23f,emissive:0x664400}))}
+  const g=new THREE.BoxGeometry(.8,.5,.08);g.translate(.4,1.55,0);const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({color:0xe5322d}));
+  const pole=new THREE.BoxGeometry(.1,1.8,.1);pole.translate(0,.9,0);m.add(new THREE.Mesh(pole,new THREE.MeshLambertMaterial({color:0xeeeeee})));
+  m.children[0].raycast=()=>{};return m};
+['coin','flag'].forEach(t=>{MOD[t]={...MOD.car,off:0};PR[t]=-10});
+const mount0=mount;mount=P=>{if(P.t!=='coin'&&P.t!=='flag')mount0(P)};
+
+let au=null;
+function beep(f,d=.08){try{au=au||new(window.AudioContext||window.webkitAudioContext)();au.resume();const o=au.createOscillator(),g=au.createGain();o.frequency.value=f;g.gain.setValueAtTime(.08,au.currentTime);g.gain.exponentialRampToValueAtTime(.001,au.currentTime+d);o.connect(g);g.connect(au.destination);o.start();o.stop(au.currentTime+d)}catch(e){}}
+
+const hist=[],redo=[];
+const remember=s=>{hist.push(s);if(hist.length>50)hist.shift();redo.length=0};
+const act0=act;act=(e,er)=>{const a=pack();act0(e,er);if(pack()!==a){remember(a);beep(er||tool==='erase'?180:420,.06)}};
+function step(from,to){if(mode!=='build'||!from.length)return;to.push(pack());load(from.pop())}
+$('bClear').addEventListener('click',()=>remember(pack()),true);
+$('mBuild').addEventListener('click',()=>{hist.length=redo.length=0});
+const button=(txt,fn,before)=>{const b=document.createElement('button');b.textContent=txt;b.onclick=fn;before.before(b);return b};
+button('Undo',()=>step(hist,redo),$('bTest'));button('Redo',()=>step(redo,hist),$('bTest'));
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||!(e.ctrlKey||e.metaKey)||e.code!=='KeyZ')return;e.preventDefault();e.shiftKey?step(redo,hist):step(hist,redo)});
+['coin','flag'].forEach(t=>{const b=button(t==='coin'?'Coin':'Finish flag',()=>{tool=t;document.querySelectorAll('[data-t]').forEach(x=>x.classList.toggle('on',x===b))},$('sw'));b.dataset.t=t});
+
+const hud=document.createElement('div');hud.style.cssText='position:absolute;right:10px;bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--pn);border:2px solid var(--ln);border-radius:8px;padding:6px 12px;z-index:4';hud.hidden=true;document.body.append(hud);
+let run=null;
+(function tick(){requestAnimationFrame(tick);
+  if(mode!=='play'||!pl){hud.hidden=true;run=null;return}
+  if(!run||run.pl!==pl)run={pl,start:performance.now(),got:0,done:false,name:mapName};
+  const coins=props.filter(p=>p.t==='coin'),flag=props.some(p=>p.t==='flag');
+  hud.hidden=!coins.length&&!flag;if(hud.hidden||run.done)return;
+  const near=p=>Math.hypot(p.wx-pl.x,p.wz-pl.z)<1.2&&Math.abs(p.wy-pl.y)<1.5;
+  coins.forEach(p=>{p.m.rotation.y+=.04;if(!p.taken&&near(p)){p.taken=true;p.m.visible=false;run.got++;beep(988,.15)}});
+  const t=(performance.now()-run.start)/1000,all=run.got===coins.length;
+  hud.textContent=(coins.length?'Coins '+run.got+'/'+coins.length+', ':'')+t.toFixed(1)+' s';
+  if(all&&(flag?props.some(p=>p.t==='flag'&&near(p)):true)){run.done=true;beep(1318,.5);
+    const k='bl_best_'+run.name;let best=t;try{best=Math.min(t,+localStorage.getItem(k)||t);localStorage.setItem(k,best)}catch(e){}
+    hud.textContent='Finished in '+t.toFixed(1)+' s. Best '+best.toFixed(1)+' s';toast('You finished!')}
+})();
+
+S.fog=new THREE.Fog(new THREE.Color(BG()||'#1d2233'),60,220);
+const tint=()=>S.fog.color.set(BG()||'#1d2233');
+addEventListener('resize',tint);matchMedia('(prefers-color-scheme:dark)').addEventListener('change',tint);
+
+const q=document.createElement('input');q.placeholder='Search maps or builders';q.setAttribute('aria-label','Search maps');$('list').before(q);
+function thumb(data){const c=document.createElement('canvas');c.width=c.height=96;c.style.cssText='position:static;width:48px;height:48px;border-radius:6px;background:#6f9a5c;flex:none';
+  try{const d=JSON.parse(data),g=c.getContext('2d'),u=96/(d.w||24);[...d.b].sort((a,b)=>a[1]-b[1]).forEach(a=>{g.fillStyle=d.pal?d.pal[a[3]]:a[3];g.fillRect(a[0]*u,a[2]*u,Math.ceil(u),Math.ceil(u))})}catch(e){}return c}
+const render0=renderList;
+renderList=function(){render0();
+  const all=[{name:'Starter playground',data:JSON.stringify(starter()),tag:'built-in'},...shared.map(m=>({...m,tag:'shared'})),...local.map(m=>({...m,tag:'this device'}))]
+    .filter(m=>!mineOnly||(m.tag==='shared'&&uid&&m.owner===uid)||m.tag==='this device');
+  const s=q.value.trim().toLowerCase();
+  [...$('list').children].forEach((r,i)=>{const m=all[i];if(!m)return;r.prepend(thumb(m.data));r.style.display=(m.name+' '+(m.author||'')).toLowerCase().includes(s)?'':'none'})};
+q.oninput=()=>renderList();
+})();
+</script><script>
+// ---- upgrade 2: username sign-in, age bands, sentence builder, 13+ text chat, touch controls ----
+(()=>{
+const YEAR=31556952000,el=(t,p,txt)=>{const e=document.createElement(t);if(txt)e.textContent=txt;if(p)p.append(e);return e};
+const mail=v=>v.includes('@')?v:v.toLowerCase()+'@users.blocklab-6d813.firebaseapp.com';
+$('ae').type='text';$('ae').placeholder='Username';$('ae').autocomplete='username';$('ae').setAttribute('aria-label','Username');$('au').hidden=true;
+const bl=el('label',null,'Birth date (new accounts) '),bd=el('input',bl);bd.type='date';$('ap').after(bl);
+let birth=null;
+const age=()=>birth==null?0:Math.floor((Date.now()-birth)/YEAR);
+$('aUp').onclick=async()=>{const un=$('ae').value.trim(),b=Date.parse(bd.value),err=m=>$('aerr').textContent=m;
+  if(!/^[A-Za-z0-9_]{3,20}$/.test(un))return err('Username: 3–20 letters, numbers or _ only.');
+  if(!(b<Date.now()&&b>Date.now()-120*YEAR))return err('Enter your birth date.');
+  try{const k=un.toLowerCase(),ref=fsd.collection('usernames').doc(k);if((await ref.get()).exists)return err('That username is taken.');
+    const a=firebase.auth(),c=firebase.auth.EmailAuthProvider.credential(mail(un),$('ap').value);
+    const u=a.currentUser&&a.currentUser.isAnonymous?(await a.currentUser.linkWithCredential(c)).user:(await a.createUserWithEmailAndPassword(mail(un),$('ap').value)).user;
+    await u.updateProfile({displayName:un});await ref.set({uid:u.uid,name:un});await rdb.ref('ages/'+u.uid).set(b);
+    birth=b;me=u;uid=u.uid;show('menu');toast('Account created.');status(u)}catch(e){err(aerr(e))}};
+$('aIn').onclick=async()=>{try{await firebase.auth().signInWithEmailAndPassword(mail($('ae').value.trim()),$('ap').value);show('menu');toast('Signed in.')}catch(e){$('aerr').textContent=aerr(e)}};
+const status0=status;status=async u=>{birth=null;if(!u.isAnonymous&&rdb){try{const v=(await rdb.ref('ages/'+u.uid).get()).val();if(uid===u.uid)birth=v}catch(e){}}return status0(u)};
+
+const W=['Hi','everyone','Can you','Do you want to','Let’s','I want to','I like','race','build','drive','skate','jump','follow','help','with me','me','you','your map','my map','the car','the skateboard','the coins','the flag','the tower','red','blue','green','big','and','but','because','it is','fun','cool','hard','now','again','please','thanks','good game','yes','no','bye'];
+const BAD=/\d|@|www|http|\.(com|net|org|gg)\b|\b(fuck|shit|bitch|cunt|dick|porn|sex|nude|snap(chat)?|discord|insta(gram)?|tiktok|whatsapp|telegram|address|school|phone)/i;
+const muted=new Set();let parts=[],hooked=null,sent=0;
+const box=el('div',$('cp2'));box.style.cssText='display:flex;flex-direction:column;gap:6px;max-height:35vh;overflow:auto';
+function push(path,data){if(!mp||banned||Date.now()<sent)return;sent=Date.now()+1500;const r=mp.ref.parent.child(path).push();
+  r.set({u:uid,n:me.displayName,t:firebase.database.ServerValue.TIMESTAMP,...data}).then(()=>setTimeout(()=>r.remove().catch(()=>{}),60000)).catch(()=>toast('Couldn’t send.'))}
+function draw(){box.textContent='';const a=age();
+  if(a>=13){const i=el('input',box);i.maxLength=100;i.placeholder='Type a message';
+    const go=()=>{const v=i.value.trim();if(!v)return;if(BAD.test(v))return toast('That message isn’t allowed.');push('text',{m:v});i.value=''};
+    i.onkeydown=e=>{if(e.key==='Enter')go()};el('button',box,'Send').onclick=go}
+  else if(a>=10){el('p',box,parts.map(x=>W[x]).join(' ')||'Tap words to make a sentence.');
+    const row=el('div',box);row.style.cssText='display:flex;flex-wrap:wrap;gap:4px';
+    W.forEach((w,i)=>el('button',row,w).onclick=()=>{if(parts.length<10){parts.push(i);draw()}});
+    el('button',box,'Undo word').onclick=()=>{parts.pop();draw()};
+    el('button',box,'Send sentence').onclick=()=>{if(parts.length){push('built',{q:parts.join(',')});parts=[];draw()}}}}
+$('pChat').addEventListener('click',draw);
+function show1(v,text){if(!text||muted.has(v.u))return;const name=String(v.n||'Player').slice(0,20);addLog(name,text);
+  const d=$('cl').lastChild;d.style.pointerEvents='auto';d.onclick=()=>{if(v.u===uid)return;
+    if(confirm('Mute '+name+'?'))muted.add(v.u);
+    if(confirm('Report this message?'))rdb.ref('reports').push({by:uid,u:v.u,m:text.slice(0,200),t:Date.now()}).then(()=>toast('Reported.')).catch(()=>toast('Couldn’t report.'))}}
+setInterval(()=>{if(mp===hooked)return;if(hooked)hooked.extra.forEach(r=>r.off());hooked=mp;if(!mp)return;const m=mp,a=age();m.extra=[];
+  const listen=(path,fn)=>{const r=m.ref.parent.child(path);m.extra.push(r);r.limitToLast(10).on('child_added',c=>{if(mp===m&&c.val())fn(c.val())},()=>{})};
+  if(a>=10)listen('built',v=>show1(v,String(v.q).split(',').slice(0,10).map(i=>W[i]||'').join(' ').trim()));
+  if(a>=13)listen('text',v=>{const t=String(v.m).slice(0,100);if(!BAD.test(t))show1(v,t)})},500);
+
+if(matchMedia('(pointer:coarse)').matches){const pad=el('div',document.body);pad.style.cssText='position:absolute;z-index:4;left:10px;right:10px;bottom:calc(130px + env(safe-area-inset-bottom,0px));display:flex;justify-content:space-between;align-items:end;pointer-events:none';
+  const grid=el('div',pad);grid.style.cssText='display:grid;grid-template-columns:repeat(3,52px);gap:4px';
+  const key1=(p,t,code,col)=>{const b=el('button',p,t);b.style.cssText='pointer-events:auto;touch-action:none;user-select:none;min-height:52px'+(col?';grid-column:'+col:'');b.setAttribute('aria-label',code);
+    b.onpointerdown=()=>keys[code]=1;b.onpointerup=b.onpointercancel=b.onpointerleave=()=>keys[code]=0};
+  key1(grid,'▲','KeyW',2);key1(grid,'◀','KeyA',1);key1(grid,'▼','KeyS',2);key1(grid,'▶','KeyD',3);key1(pad,'Jump','Space');
+  setInterval(()=>pad.style.display=mode==='play'?'flex':'none',200)}
+})();
+</script><script>
+// ---- upgrade 3: existing accounts set a birth date once ----
+(()=>{
+const box=document.createElement('div'),label=document.createElement('label'),d=document.createElement('input'),b=document.createElement('button');
+d.type='date';label.append('Your birth date ',d);b.textContent='Save birthday';box.append(label,' ',b);box.hidden=true;$('acct').after(box);
+const status1=status;status=async u=>{box.hidden=true;await status1(u);
+  if(u.isAnonymous||!rdb||uid!==u.uid)return;
+  try{box.hidden=(await rdb.ref('ages/'+u.uid).get()).exists()}catch(e){}};
+$('mOut').addEventListener('click',()=>box.hidden=true);
+b.onclick=async()=>{const v=Date.parse(d.value);
+  if(!(v<Date.now()&&v>Date.now()-120*31556952000))return toast('Enter your birth date.');
+  if(!confirm('Save '+d.value+'? You can’t change it later.'))return;
+  try{await rdb.ref('ages/'+me.uid).set(v);await status(me);d.value='';toast('Birthday saved.')}catch(e){toast('Couldn’t save your birthday.')}};
+})();
 </script></body></html>
