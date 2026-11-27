@@ -45,6 +45,31 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--ac);outline-off
 .avtabs{flex-wrap:nowrap!important;overflow-x:auto;max-width:100%;justify-content:safe center!important;flex-shrink:0}
 .avtabs button{flex:0 0 auto;min-height:36px;padding:4px 10px}
 </style>
+<style id="ui2">
+/* BlockLab UI refresh: chunky block-style controls */
+:root,:root[data-theme]{--ac:#ffb020;--pn:#222842;--ln:#46507a}
+@media (prefers-color-scheme:light){:root{--pn:#ffffff;--ln:#aab3d1}}
+button{border-radius:10px!important;font-weight:700;letter-spacing:.02em;box-shadow:0 4px 0 rgba(0,0,0,.35),inset 0 2px 0 rgba(255,255,255,.14);transition:transform .06s,box-shadow .06s,filter .12s;-webkit-tap-highlight-color:transparent;user-select:none}
+button:hover{filter:brightness(1.12)}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.35),inset 0 2px 0 rgba(255,255,255,.14)}
+button.on{outline:3px solid var(--ac);outline-offset:1px}
+button.pri{background-image:linear-gradient(rgba(255,255,255,.25),rgba(255,255,255,0))}
+button:focus-visible,input:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+input{border-radius:10px!important;border:2px solid var(--ln)!important;min-height:44px;box-shadow:inset 0 3px 6px rgba(0,0,0,.18)}
+.bar{gap:8px;box-shadow:0 0 16px rgba(0,0,0,.3)}
+.scr{gap:12px;overflow-y:auto;overscroll-behavior:contain}
+.scr>button{width:min(320px,86vw);min-height:50px;flex-shrink:0}
+.scr h1,.scr h2{text-shadow:0 4px 0 rgba(0,0,0,.35);margin:4px 0}
+.scr p{max-width:34ch;text-align:center;line-height:1.4}
+.scr input{width:min(320px,86vw)}
+#list>*{border:2px solid var(--ln);border-radius:12px;background:var(--pn);box-shadow:0 4px 0 rgba(0,0,0,.25)}
+#cp2{border-radius:14px;border:2px solid var(--ln);box-shadow:0 8px 24px rgba(0,0,0,.45)}
+#cl>*{border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.3);animation:ui-in .2s ease-out}
+#inv button{border:2px solid var(--ln)}
+@keyframes ui-in{from{opacity:0;transform:translateY(6px)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (orientation:landscape) and (max-height:500px){.scr{gap:6px;justify-content:safe center}.scr>button{min-height:38px}}
+</style>
 </head><body>
 <canvas id="c"></canvas>
 <div id="toast"></div>
@@ -6897,9 +6922,18 @@ function setSize(n){N=Math.min(96,Math.max(16,n|0));gm.geometry.dispose();gm.geo
 function load(j){clearMap();const d=typeof j=='string'?JSON.parse(j):j;setSize(d.w||24);const P=d.pal,cv=c=>P?(c==null?null:P[c]):c;
   (d.b||[]).forEach(a=>addBlock(a[0],a[1],a[2],cv(a[3])));(d.p||[]).forEach(a=>addProp(a[0],a[1],a[2],a[3],cv(a[4])));
   const s=d.s||[N/2|0,0,N/2|0];setSpawn(s[0],s[1],s[2],cv(s[3]))}
-function starter(){const b=[];for(let x=8;x<16;x++)for(let z=8;z<16;z++)b.push([x,0,z,x%2?4:6]);
-  for(let i=0;i<6;i++)b.push([16+i,i,12,i%8],[6,i,8+i,2]);b.push([20,6,12,3],[21,6,12,3]);
-  return{b,p:[['car',10,1,9],['board',13,1,13]],s:[11,1,11]}}
+function starter(){const b=[],p=[],add=(t,x,y,z)=>p.push([t,x,y,z]),fill=(x0,x1,y,z0,z1,c)=>{for(let x=x0;x<=x1;x++)for(let z=z0;z<=z1;z++)b.push([x,y,z,typeof c==='function'?c(x,z):c])};
+  fill(12,19,0,12,19,(x,z)=>(x+z)%2?4:6);                                   // spawn plaza
+  for(let i=0;i<4;i++)for(let y=0;y<=i;y++)b.push([20+i,y,14,i%8]);          // rainbow stairs up to the key
+  fill(24,26,3,13,15,3);add('key',25,4,14);
+  for(let x=22;x<=27;x++)for(let z=21;z<=26;z++)if((x===22||x===27||z===21||z===26)&&!(x===22&&z===23))b.push([x,0,z,2],[x,1,z,2]); // locked room
+  add('door',22,0,23);add('board',25,0,24);add('gun',25,0,22);
+  fill(24,27,0,4,7,1);fill(24,27,1,4,7,1);fill(24,27,2,4,7,5);add('jpad',22,0,5); // jump pad tower
+  fill(4,7,5,4,7,5);add('tele',12,1,12);add('tele',5,6,5);                    // teleport to a sky island and back
+  for(let x=3;x<=5;x++)for(let z=12;z<=20;z++){if(x===4&&z%2===0)b.push([x,0,z,6]);else add('lava',x,0,z)} // lava hop
+  for(let x=8;x<=18;x+=2)add('spad',x,0,28);                                  // speed lane
+  add('car',9,0,23);add('board',18,1,18);add('gun',13,1,18);
+  return{w:32,b,p:p.filter(a=>MOD[a[0]]),s:[15,1,15]}}
 
 // ---- screens ----
 const show=(...ids)=>{['menu','browse','auth','admin','hb','hb2','hp','inv'].forEach(i=>$(i).hidden=!ids.includes(i));$('wp').hidden=true;$('cp2').hidden=true;$('cl').hidden=!ids.includes('hp')};
@@ -7189,11 +7223,11 @@ let run=null;
   const coins=props.filter(p=>p.t==='coin'),flag=props.some(p=>p.t==='flag');
   hud.hidden=!coins.length&&!flag;if(hud.hidden||run.done)return;
   const near=p=>Math.hypot(p.wx-pl.x,p.wz-pl.z)<1.2&&Math.abs(p.wy-pl.y)<1.5;
-  coins.forEach(p=>{p.m.rotation.y+=.04;if(!p.taken&&near(p)){p.taken=true;p.m.visible=false;run.got++;beep(988,.15)}});
+  coins.forEach(p=>{p.m.rotation.y+=.04;if(!p.taken&&near(p)){p.taken=true;p.m.visible=false;run.got++;beep(988,.15);if(window.claimCoin&&claimCoin(run.name,p)){addTokens(3);toast('+3 Block Tokens')}}});
   const t=(performance.now()-run.start)/1000,all=run.got===coins.length;
   hud.textContent=(coins.length?'Coins '+run.got+'/'+coins.length+', ':'')+t.toFixed(1)+' s';
   if(all&&(flag?props.some(p=>p.t==='flag'&&near(p)):true)){run.done=true;beep(1318,.5);
-    const k='bl_best_'+run.name;let best=t;try{best=Math.min(t,+localStorage.getItem(k)||t);localStorage.setItem(k,best)}catch(e){}
+    const k='bl_best_'+(uid||'guest')+'_'+run.name;let best=t;try{best=Math.min(t,+localStorage.getItem(k)||t);localStorage.setItem(k,best)}catch(e){}
     hud.textContent='Finished in '+t.toFixed(1)+' s. Best '+best.toFixed(1)+' s';toast('You finished!')}
 })();
 
@@ -7446,6 +7480,7 @@ setInterval(()=>drop.hidden=!(pl&&pl.heldIdx>=0),150);
 (()=>{
 const el=(t,p,txt,css)=>{const e=document.createElement(t);if(txt)e.textContent=txt;if(css)e.style.cssText=css;p.append(e);return e};
 const scr=el('div',document.body,'','z-index:7;justify-content:safe center;background:#1d2233');scr.className='scr';scr.hidden=true;
+const bank=el('div',scr,'','font-weight:700;background:var(--pn);border:2px solid var(--ln);border-radius:10px;padding:4px 12px;flex-shrink:0');
 const cv3=el('canvas',scr,'','position:static;width:min(260px,80vw);height:min(300px,38vh);flex-shrink:0;touch-action:none');
 const tabs=el('div',scr,'','display:flex;gap:4px'),grid=el('div',scr,'','display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:420px');
 const LISTS={Hat:[0,['None','Cap','Top hat','Crown','Party hat']],Face:[1,['None','Happy','Sad','Angry','Joyful','Straight']],Back:[2,['None','Cape','Backpack']],Hair:[4,['None','Crew cut','Side sweep','Mohawk','Afro','Flat top','Swoop']],Animation:[3,['New (moving limbs)','Old (still limbs)']]};
@@ -7487,6 +7522,7 @@ label.hidden=true;label.before(open);
 open.onclick=()=>{scr.hidden=false;
   if(!ren){ren=new THREE.WebGLRenderer({canvas:cv3,antialias:true,alpha:true});ren.setPixelRatio(Math.min(2,devicePixelRatio));
     scene=new THREE.Scene();scene.add(new THREE.HemisphereLight(0xffffff,0x556677,1));view=new THREE.PerspectiveCamera(35,1,.1,50);view.position.set(0,1.3,4.6);view.lookAt(0,1,0);doll=mkPlayer(myc);doll.position.set(0,0,0);scene.add(doll)}
+  bank.textContent='Block Tokens: '+(window.blockTokens?blockTokens():0);
   ren.setSize(cv3.clientWidth,cv3.clientHeight,false);view.aspect=cv3.clientWidth/cv3.clientHeight;view.updateProjectionMatrix();draw();frame()};
 })();
 </script><script>
@@ -7607,6 +7643,13 @@ function dance(m,on,id,code){if(!m)return;if(m.userData.dance!==id){m.userData.d
   if(id===1||id===2){drop=0;rx=rz=ry=lift=0;kick=[0,0];
     if(id===1){const w=Math.sin(now*9)*.75;legs=[[0,-Math.cos(w),Math.sin(w)],[0,-Math.cos(w),-Math.sin(w)]];arms=[[-.04,-Math.cos(w),-Math.sin(w)],[.04,-Math.cos(w),Math.sin(w)]]}
     else{legs=[[0,-1,0],[0,-1,0]];arms=[[-.04,1,0],[.04,1,0]]}} // R6 jump: both arms straight up, legs straight
+  if(id===9){ // floss: straight arms swing side to side, swapping front and back; hips go the other way
+    const beat=(now-m.userData.t0)/.32,n=Math.floor(beat),f=beat-n,e=f*f*(3-2*f);
+    // [side, which side of the body the left arm passes]: R in front, L, behind, L ...
+    const POSE=[[1,1],[-1,1],[1,-1],[-1,-1]],p0=POSE[n%4],p1=POSE[(n+1)%4],sx=p0[0]+(p1[0]-p0[0])*e;
+    const depth=(i)=>{const a=p0[1]*(i?-1:1),b=p1[1]*(i?-1:1);return (a+(b-a)*e)*.55};
+    drop=.04;rx=ry=lift=0;rz=sx*.14;kick=[0,0];legs=[[-.12-sx*.1,-1,0],[.12-sx*.1,-1,0]];
+    arms=[[sx*.75,-.7,depth(0)],[sx*.75,-.7,depth(1)]]}
   r.torso.position.set(0,.91-drop,0);r.head.position.set(0,1.457-drop,0);if(out)out.position.y=-drop;
   // tilt, turn or flip the whole body around its middle
   const pivot=V(0,.91-drop,0);r.g.rotation.set(rx,ry,rz);r.g.position.copy(pivot).sub(pivot.clone().applyEuler(r.g.rotation));r.g.position.y+=lift;
@@ -7640,7 +7683,7 @@ function motion(m,riding){const u=m.userData,now=performance.now(),x=m.position.
     if(v>.5)u.walkUntil=now+220;if(vy>1.5)u.airUntil=now+220;u.fast=v>10;u.at={x,y,z,t:now}}
   if(riding||u.fast)return 0;return now<u.airUntil?2:now<u.walkUntil?1:0}
 (function tick(){requestAnimationFrame(tick);
-  const run=(m,e,riding,air,wear)=>{if(!m)return;const dancing=e===7||e===8,old=String(wear).split('.')[3]==='1';
+  const run=(m,e,riding,air,wear)=>{if(!m)return;const dancing=e===7||e===8||e===9,old=String(wear).split('.')[3]==='1';
     let id=dancing?e:old?0:motion(m,riding);
     if(!dancing&&!old&&!riding&&air!==undefined){if(air)id=2;else if(id===2)id=m.userData.walkUntil>performance.now()?1:0}
     dance(m,true,id||3,wear)};
@@ -7678,7 +7721,6 @@ setInterval(()=>{try{if(!clockOn&&rdb)serverNow()}catch(e){}},300);
 </script><script>
 // ---- upgrade 14: gun knockouts and Block Tokens ----
 (()=>{
-const hud=document.createElement('div');hud.style.cssText='position:absolute;z-index:4;left:10px;top:calc(120px + env(safe-area-inset-top,0px));background:var(--pn);border:2px solid var(--ln);border-radius:8px;padding:4px 10px';hud.hidden=true;document.body.append(hud);
 const key=()=>'bl_tokens_'+(uid||'guest');
 const tokens=()=>{try{return +localStorage.getItem(key())||0}catch(e){return 0}};
 let hooked=null,refs=[],hp=3,safeUntil=0;const paid={},shotAt={};
@@ -7691,7 +7733,9 @@ tickBullets=function(dt){if(!mp)return tick0(dt);
       if(Math.hypot(p.x+sx*u-q.x,p.z+sz*u-q.z)<.65&&p.y>q.y&&p.y<q.y+1.9){S.remove(b.m);bullets.splice(i,1);shotAt[id]=Date.now();
         mp.ref.parent.child('hits/'+id).push({by:uid}).catch(()=>toast('Hit not sent. Update the database rules.'));break}}}
   tick0(dt)};
-setInterval(()=>{hud.hidden=mode!=='play';hud.textContent='Block Tokens: '+tokens();
+window.blockTokens=tokens;
+window.addTokens=n=>{try{localStorage.setItem(key(),tokens()+n)}catch(e){}};
+setInterval(()=>{
   if(mp===hooked)return;refs.forEach(r=>r.off());refs=[];hooked=mp;hp=3;if(!mp)return;
   const m=mp,room=m.ref.parent,mine=room.child('hits/'+uid),kills=room.child('kills/'+uid);refs=[mine,kills];safeUntil=Date.now()+3000;
   mine.on('child_added',s=>{const by=s.val()&&s.val().by;s.ref.remove().catch(()=>{});
@@ -7771,5 +7815,47 @@ mk=function(t,c){const m=mk3(t,c),size=SIZE[t];if(!size)return m;
     if(!rc.ray.intersectBox(box,point))return;
     out.push({distance:rc.ray.origin.distanceTo(point),point:point.clone(),object:m,face:{normal:new THREE.Vector3(0,1,0)}})};
   return m};
+})();
+</script><script>
+// ---- upgrade 17: floss emote ----
+(()=>{
+const list=document.getElementById('emlist'),b=document.createElement('button');b.textContent='Floss';b.style.minHeight='44px';
+b.onclick=()=>{list.hidden=true;if(pl&&pl.mode==='walk')myemote=9};list.prepend(b);
+setInterval(()=>{if(myemote===9&&(mode!=='play'||!pl||pl.mode!=='walk'||keys.Space||keys.KeyW||keys.KeyA||keys.KeyS||keys.KeyD||keys.ArrowUp||keys.ArrowDown||keys.ArrowLeft||keys.ArrowRight))myemote=0},100);
+})();
+</script><script>
+// reload the menu's starter map now that every item type is defined
+if(mode==='menu'){load(starter());camOrbit()}
+</script><script>
+// ---- upgrade 18: account saves, once-only coin rewards, 15-coin limit ----
+(()=>{
+const get=k=>{try{return localStorage.getItem(k)}catch(e){return null}},put=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+const parse=s=>{try{return JSON.parse(s)||{}}catch(e){return {}}};
+const account=()=>me&&!me.isAnonymous?me.uid:null,who=()=>uid||'guest';
+let loaded=null,loading=null,last='';
+// a coin pays out once: remembered by map name and coin position
+window.claimCoin=(name,p)=>{if(account()&&loaded!==account())return false;
+  const k='bl_coins_'+who(),got=parse(get(k)),id=name+'|'+[p.wx,p.wy,p.wz].join(',');
+  if(got[id])return false;got[id]=1;put(k,JSON.stringify(got));return true};
+const add0=addProp;
+addProp=function(t,...rest){if(t==='coin'&&mode==='build'&&props.filter(p=>p.t==='coin').length>=15)return toast('Maps can have up to 15 coins.');return add0(t,...rest)};
+const bestPrefix=()=>'bl_best_'+who()+'_';
+function snapshot(){const best={};try{Object.keys(localStorage).filter(k=>k.startsWith(bestPrefix())).forEach(k=>best[k.slice(bestPrefix().length)]=+get(k))}catch(e){}
+  return JSON.stringify({wear:myw,tokens:+get('bl_tokens_'+who())||0,coins:parse(get('bl_coins_'+who())),best})}
+async function load1(id){loading=id;
+  try{const v=(await rdb.ref('saves/'+id+'/data').get()).val();if(uid!==id)return;
+    if(v){const d=parse(v);if(/^\d(\.\d){2,10}$/.test(d.wear))myw=d.wear;
+      put('bl_tokens_'+id,+d.tokens||0);put('bl_coins_'+id,JSON.stringify({...parse(get('bl_coins_'+id)),...d.coins}));
+      Object.entries(d.best||{}).forEach(([n,t])=>put(bestPrefix()+n,Math.min(t,+get(bestPrefix()+n)||t)));last=v}
+    else last='';
+    loaded=id}
+  catch(e){toast('Couldn’t load your save. Check the database rules.');await new Promise(r=>setTimeout(r,15000))}
+  finally{loading=null}}
+let guestWear=myw,was=null;
+setInterval(()=>{if(!rdb)return;const id=account();
+  if(id!==was){if(!was)guestWear=myw;else if(!id){myw=guestWear;put('bl_wear',myw)}was=id;loaded=null;last=''}
+  if(!id)return;
+  if(loaded!==id){if(!loading)load1(id);return}
+  const now=snapshot();if(now!==last){last=now;rdb.ref('saves/'+id+'/data').set(now).catch(()=>{last='';toast('Couldn’t save to your account.')})}},2000);
 })();
 </script></body></html>
