@@ -7461,7 +7461,7 @@ function draw(){[...tabs.children].forEach(b=>b.classList.toggle('on',b.textCont
     if(a[9]!==2){a[9]=1;if(part==='Sleeves')part='Shirt'}
     const nav=el('div',grid,'','display:flex;flex-wrap:wrap;gap:4px;flex-basis:100%;justify-content:center');
     ['Skin','Torso','Legs','Shirt',...(a[9]===2?['Sleeves']:[])].forEach(n=>{const b=el('button',nav,n,'min-height:36px;padding:4px 10px');b.classList.toggle('on',n===part);b.onclick=()=>{part=n;draw()}});
-    if(part==='Skin')row('',6,[['orange','#ffb364'],['yellow','#ffd93d']],true);
+    if(part==='Skin')row('',6,[['orange','#ffb364'],['yellow','#ffd93d'],['white','#ffffff']],true);
     if(part==='Torso')row('',7,cloth,true);
     if(part==='Legs')row('',8,cloth,true);
     if(part==='Shirt')row('',9,[null,['Shirt'],['Long sleeve']],false);
@@ -7615,20 +7615,20 @@ function dance(m,on,id,code){if(!m)return;if(m.userData.dance!==id){m.userData.d
   r.arms.forEach((a,i)=>{const side=i?1:-1;
     const plain=id>0&&id<4; // standing, walking, jumping: flush with the torso like a classic block character
     a.scale.x=a.scale.y=plain?1.1:1;
-    if(plain){const sh=V(side*.366,1.214,0),d=V(...arms[i]).normalize();
+    if(plain){const sh=V(side*.373,1.214,0),d=V(...arms[i]).normalize();
       if(d.y>0)sh.y=1.0; // raised arms pivot a bit lower
       else sh.z=0;
       return join(a,sh,sh.clone().addScaledVector(d,.607))}
     if(!arms)return join(a,V(side*.33,y+.05-i*.1,.2),V(-side*.27,y-.03-i*.06,.23+i*.03));
     const sh=V(side*.34,y+.1,0);join(a,sh,sh.clone().addScaledVector(V(...arms[i]).normalize(),.58))})}
 // skin (head and arms), torso and leg colours, and the shirt cut
-const TONES=['#ffb364','#ffd93d'],CLOTH=['#2aa8f2','#e5322d','#22a447','#8e44ad','#222428','#f4f4f4','#ff6fb5','#f59e0b','#17307a'],mats={};
+const TONES=['#ffb364','#ffd93d','#ffffff'],CLOTH=['#2aa8f2','#e5322d','#22a447','#8e44ad','#222428','#f4f4f4','#ff6fb5','#f59e0b','#17307a'],mats={};
 const lam=c=>mats[c]||(mats[c]=new THREE.MeshLambertMaterial({color:c}));
 function paint(r,code){const a=String(code||'').split('.').map(Number),skin=lam(TONES[a[6]]||TONES[0]),top=lam(CLOTH[a[7]]||CLOTH[0]),pants=lam(CLOTH[a[8]]||CLOTH[1]),cut=a[9]===2?2:1; // 1 shirt (no sleeves), 2 long sleeve
   if(!r.sleeves){r.sleeves=r.arms.map(arm=>{const o=new THREE.Mesh(new THREE.BoxGeometry(.232,.232,1),top);o.raycast=()=>{};arm.add(o);return o});
     r.straps=[-.2,.2].map(x=>{const o=new THREE.Mesh(new THREE.BoxGeometry(.09,.1,.25),skin);o.position.set(x,.26,0);o.raycast=()=>{};r.torso.add(o);return o})}
   r.head.material=skin;r.torso.material=top;r.legs.forEach(l=>l.o.material=pants);r.arms.forEach(o=>o.material=skin);
-  const len=cut===2?.86:0;r.sleeves.forEach(o=>{o.visible=len>0;o.material=a[10]?lam(CLOTH[a[10]-1]):top;o.scale.z=len||1;o.position.z=-.5+len/2});
+  const len=cut===2?.86:0;r.sleeves.forEach(o=>{o.visible=len>0;o.material=a[10]?lam(CLOTH[a[10]-1]):top;o.scale.z=(len||1)+.012;o.position.z=-.5+len/2-.006});
   r.straps.forEach(o=>o.visible=false) /* plain block-character shirt: no straps */ }
 window.poseBody=(m,code)=>dance(m,true,3,code);
 
